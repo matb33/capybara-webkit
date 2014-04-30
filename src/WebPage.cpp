@@ -41,6 +41,8 @@ WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
 void WebPage::resetWindowSize() {
   this->setViewportSize(QSize(1680, 1050));
   this->settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);
+  this->settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
+  QWebSettings::setOfflineStoragePath(QLatin1String("/tmp"));
 }
 
 void WebPage::resetLocalStorage() {
