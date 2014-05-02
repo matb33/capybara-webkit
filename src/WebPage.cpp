@@ -39,11 +39,16 @@ WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
 }
 
 void WebPage::resetWindowSize() {
+  quint64 num = 0xFFFFFFFF;
   this->setViewportSize(QSize(1680, 1050));
   this->settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);
+  this->settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
   this->settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
-  QWebSettings::setOfflineStoragePath(QLatin1String("/tmp"));
-  QWebSettings::setOfflineWebApplicationCacheQuota(0xffffffff);
+  this->settings()->setOfflineWebApplicationCacheQuota(num);
+  this->settings()->setOfflineStorageDefaultQuota(num);
+  this->settings()->setOfflineStoragePath("/tmp/qtwebkit");
+  this->settings()->setOfflineWebApplicationCachePath("/tmp/qtwebkit");
+  this->settings()->setLocalStoragePath("/tmp/qtwebkit");
 }
 
 void WebPage::resetLocalStorage() {
