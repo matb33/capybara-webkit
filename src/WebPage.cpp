@@ -43,6 +43,7 @@ void WebPage::resetWindowSize() {
   this->settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);
   this->settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
   QWebSettings::setOfflineStoragePath(QLatin1String("/tmp"));
+  QWebSettings::setOfflineWebApplicationCacheQuota(0xffffffff);
 }
 
 void WebPage::resetLocalStorage() {
