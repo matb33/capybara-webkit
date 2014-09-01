@@ -22,6 +22,8 @@ WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
   m_confirmAction = true;
   m_promptAction = false;
 
+  quint64 num = 0xFFFFFFFF;
+
   setForwardUnsupportedContent(true);
   loadJavascript();
   setUserStylesheet();
@@ -40,10 +42,19 @@ WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
   settings()->setAttribute(QWebSettings::JavascriptCanCloseWindows, true);
   settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);
 
-  if(QFileInfo("tmp").isDir()) {
-    settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
-    settings()->setOfflineWebApplicationCachePath("tmp");
-  }
+  settings()->setAttribute(QWebSettings::LocalStorageEnabled, true);
+  settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
+  settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
+  settings()->setOfflineWebApplicationCacheQuota(num);
+  settings()->setOfflineStorageDefaultQuota(num);
+  settings()->setOfflineStoragePath("/tmp/qtwebkit");
+  settings()->setOfflineWebApplicationCachePath("/tmp/qtwebkit");
+  settings()->setLocalStoragePath("/tmp/qtwebkit");
+
+  // if(QFileInfo("tmp").isDir()) {
+  //   settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
+  //   settings()->setOfflineWebApplicationCachePath("tmp");
+  // }
 
   createWindow();
 }
@@ -55,17 +66,7 @@ void WebPage::createWindow() {
 
 void WebPage::resize(int width, int height) {
   QSize size(width, height);
-  quint64 num = 0xFFFFFFFF;
   setViewportSize(size);
-  this->settings()->setAttribute(QWebSettings::LocalStorageEnabled, true);
-  this->settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);  // seems necessary
-  this->settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
-  this->settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
-  this->settings()->setOfflineWebApplicationCacheQuota(num);
-  this->settings()->setOfflineStorageDefaultQuota(num);
-  this->settings()->setOfflineStoragePath("/tmp/qtwebkit");
-  this->settings()->setOfflineWebApplicationCachePath("/tmp/qtwebkit");
-  this->settings()->setLocalStoragePath("/tmp/qtwebkit");
 }
 
 void WebPage::resetLocalStorage() {
