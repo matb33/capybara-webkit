@@ -19,11 +19,7 @@ Gem::Specification.new do |s|
 
   s.required_ruby_version = ">= 1.9.0"
 
-<<<<<<< HEAD
-  s.add_runtime_dependency("capybara", ">= 2.0.2", "< 2.3.0")
-=======
   s.add_runtime_dependency("capybara", ">= 2.0.2", "< 2.5.0")
->>>>>>> c1b501ca525532d261ded8d3c0c6408716a1f8ef
   s.add_runtime_dependency("json")
 
   s.add_development_dependency("rspec", "~> 2.14.0")
