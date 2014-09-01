@@ -58,6 +58,7 @@ void WebPage::resize(int width, int height) {
   quint64 num = 0xFFFFFFFF;
   setViewportSize(size);
   this->settings()->setAttribute(QWebSettings::LocalStorageEnabled, true);
+  this->settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);  // seems necessary
   this->settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
   this->settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
   this->settings()->setOfflineWebApplicationCacheQuota(num);
