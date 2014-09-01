@@ -42,6 +42,7 @@ void WebPage::resetWindowSize() {
   quint64 num = 0xFFFFFFFF;
   this->setViewportSize(QSize(1680, 1050));
   this->settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);
+  this->settings()->setAttribute(QWebSettings::SessionStorageEnabled, true);
   this->settings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
   this->settings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
   this->settings()->setOfflineWebApplicationCacheQuota(num);
