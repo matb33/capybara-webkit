@@ -7,6 +7,15 @@ PRECOMPILED_DIR = $${BUILD_DIR}
 OBJECTS_DIR = $${BUILD_DIR}
 MOC_DIR = $${BUILD_DIR}
 HEADERS = \
+  FindModal.h \
+  AcceptAlert.h \
+  GoForward.h \
+  GoBack.h \
+  WindowMaximize.h \
+  WindowSize.h \
+  WindowCommand.h \
+  WindowOpen.h \
+  WindowClose.h \
   Version.h \
   EnableLogging.h \
   Authenticate.h \
@@ -18,7 +27,7 @@ HEADERS = \
   JavascriptConfirmMessages.h \
   JavascriptPromptMessages.h \
   IgnoreSslErrors.h \
-  ResizeWindow.h \
+  WindowResize.h \
   CurrentUrl.h \
   ConsoleMessages.h \
   WebPage.h \
@@ -68,9 +77,19 @@ HEADERS = \
   JavascriptCommand.h \
   FindXpath.h \
   NetworkReplyProxy.h \
-  IgnoreDebugOutput.h
+  IgnoreDebugOutput.h \
+  StdinNotifier.h
 
 SOURCES = \
+  FindModal.cpp \
+  AcceptAlert.cpp \
+  GoForward.cpp \
+  GoBack.cpp \
+  WindowMaximize.cpp \
+  WindowSize.cpp \
+  WindowCommand.cpp \
+  WindowOpen.cpp \
+  WindowClose.cpp \
   Version.cpp \
   EnableLogging.cpp \
   Authenticate.cpp \
@@ -82,7 +101,7 @@ SOURCES = \
   JavascriptConfirmMessages.cpp \
   JavascriptPromptMessages.cpp \
   IgnoreSslErrors.cpp \
-  ResizeWindow.cpp \
+  WindowResize.cpp \
   CurrentUrl.cpp \
   ConsoleMessages.cpp \
   main.cpp \
@@ -133,7 +152,8 @@ SOURCES = \
   JavascriptCommand.cpp \
   FindXpath.cpp \
   NetworkReplyProxy.cpp \
-  IgnoreDebugOutput.cpp
+  IgnoreDebugOutput.cpp \
+  StdinNotifier.cpp
 
 RESOURCES = webkit_server.qrc
 QT += network

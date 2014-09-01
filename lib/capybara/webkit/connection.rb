@@ -8,7 +8,7 @@ module Capybara::Webkit
     SERVER_PATH = File.expand_path("../../../../bin/webkit_server", __FILE__)
     WEBKIT_SERVER_START_TIMEOUT = 15
 
-    attr_reader :port
+    attr_reader :port, :pid
 
     def initialize(options = {})
       @socket = nil
@@ -35,11 +35,24 @@ module Capybara::Webkit
     end
 
     def gets
-      @socket.gets
+      response = ""
+      until response.match(/\n/) do
+        response += read(1)
+      end
+      response
     end
 
     def read(length)
-      @socket.read(length)
+      response = ""
+      begin
+        while response.length < length do
+          response += @socket.read_nonblock(length - response.length)
+        end
+      rescue IO::WaitReadable
+        Thread.new { IO.select([@socket]) }.join
+        retry
+      end
+      response
     end
 
     private
@@ -52,32 +65,22 @@ module Capybara::Webkit
     end
 
     def open_pipe
-      _, @pipe_stdout, @pipe_stderr, @wait_thr = Open3.popen3(SERVER_PATH)
-      register_shutdown_hook
+      @pipe_stdin, @pipe_stdout, @pipe_stderr, @wait_thr = Open3.popen3(SERVER_PATH)
     end
 
-    def register_shutdown_hook
-      @owner_pid = Process.pid
-      at_exit do
-        if Process.pid == @owner_pid
-          kill_process
-        end
-      end
-    end
-
-    def kill_process
-      if RUBY_PLATFORM =~ /mingw32/
-        Process.kill(9, @pid)
+    def parse_port(line)
+      if match = line.to_s.match(/listening on port: (\d+)/)
+        match[1].to_i
       else
-        Process.kill("INT", @pid)
+        raise ConnectionError, "#{SERVER_PATH} failed to start."
       end
-    rescue Errno::ESRCH
-      # This just means that the webkit_server process has already ended
     end
 
     def discover_port
       if IO.select([@pipe_stdout], nil, nil, WEBKIT_SERVER_START_TIMEOUT)
-        @port = ((@pipe_stdout.first || '').match(/listening on port: (\d+)/) || [])[1].to_i
+        @port = parse_port(@pipe_stdout.first)
+      else
+        raise ConnectionError, "#{SERVER_PATH} failed to start after #{WEBKIT_SERVER_START_TIMEOUT} seconds."
       end
     end
 

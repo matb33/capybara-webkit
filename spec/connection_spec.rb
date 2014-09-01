@@ -2,6 +2,54 @@ require 'spec_helper'
 require 'capybara/webkit/connection'
 
 describe Capybara::Webkit::Connection do
+  it "kills the process when the parent process dies", skip_on_windows: true, skip_on_jruby: true do
+    read_io, write_io = IO.pipe
+
+    fork_pid = fork do
+      read_io.close
+      connection = Capybara::Webkit::Connection.new
+      write_io.write(connection.pid)
+      write_io.close
+      Process.wait(connection.pid)
+    end
+
+    write_io.close
+
+    webkit_pid = read_io.read.to_i
+    webkit_pid.should be > 1
+    read_io.close
+    Process.kill(9, fork_pid)
+    sleep 1
+    expect { Process.getpgid(webkit_pid) }.to raise_error Errno::ESRCH
+  end
+
+  it "raises an error if the server has stopped", skip_on_windows: true do
+    path = 'false'
+    stub_const("Capybara::Webkit::Connection::SERVER_PATH", path)
+
+    expect { Capybara::Webkit::Connection.new }.
+      to raise_error(
+        Capybara::Webkit::ConnectionError,
+        "#{path} failed to start.")
+  end
+
+  it "raises an error if the server is not ready", skip_on_windows: true do
+    server_path = 'sleep 1'
+    stub_const("Capybara::Webkit::Connection::SERVER_PATH", server_path)
+    start_timeout = 0.5
+    stub_const("Capybara::Webkit::Connection::WEBKIT_SERVER_START_TIMEOUT", start_timeout)
+
+    error_string =
+      if defined?(::JRUBY_VERSION)
+        "#{server_path} failed to start."
+      else
+        "#{server_path} failed to start after #{start_timeout} seconds."
+      end
+
+    expect { Capybara::Webkit::Connection.new }.
+      to raise_error(Capybara::Webkit::ConnectionError, error_string)
+  end
+
   it "boots a server to talk to" do
     url = "http://#{@rack_server.host}:#{@rack_server.port}/"
     connection.puts "Visit"
@@ -30,7 +78,7 @@ describe Capybara::Webkit::Connection do
     redirected_connection.puts script.to_s.bytesize
     redirected_connection.print script
 
-    expect(read_io).to include_response "hello world \n"
+    expect(read_io).to include_response "\nhello world"
   end
 
   it 'does not forward stderr to nil' do
