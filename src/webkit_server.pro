@@ -1,12 +1,18 @@
 TEMPLATE = app
 TARGET = webkit_server
 DESTDIR = .
+QMAKE_CXXFLAGS += $$(CXXFLAGS)
+QMAKE_CFLAGS += $$(CFLAGS)
+QMAKE_LFLAGS += $$(LDFLAGS)
 PROJECT_DIR = $$_PRO_FILE_PWD_
 BUILD_DIR = $${PROJECT_DIR}/build
 PRECOMPILED_DIR = $${BUILD_DIR}
 OBJECTS_DIR = $${BUILD_DIR}
 MOC_DIR = $${BUILD_DIR}
 HEADERS = \
+  BlockUrl.h \
+  AllowUrl.h \
+  SetUnknownUrlMode.h \
   FindModal.h \
   AcceptAlert.h \
   GoForward.h \
@@ -78,9 +84,18 @@ HEADERS = \
   FindXpath.h \
   NetworkReplyProxy.h \
   IgnoreDebugOutput.h \
-  StdinNotifier.h
+  StdinNotifier.h \
+  RequestHandler.h \
+  BlacklistedRequestHandler.h \
+  MissingContentHeaderRequestHandler.h \
+  CustomHeadersRequestHandler.h \
+  NetworkRequestFactory.h \
+  UnknownUrlHandler.h
 
 SOURCES = \
+  BlockUrl.cpp \
+  AllowUrl.cpp \
+  SetUnknownUrlMode.cpp \
   FindModal.cpp \
   AcceptAlert.cpp \
   GoForward.cpp \
@@ -153,12 +168,22 @@ SOURCES = \
   FindXpath.cpp \
   NetworkReplyProxy.cpp \
   IgnoreDebugOutput.cpp \
-  StdinNotifier.cpp
+  StdinNotifier.cpp \
+  RequestHandler.cpp \
+  BlacklistedRequestHandler.cpp \
+  MissingContentHeaderRequestHandler.cpp \
+  CustomHeadersRequestHandler.cpp \
+  NetworkRequestFactory.cpp \
+  UnknownUrlHandler.cpp
 
 RESOURCES = webkit_server.qrc
 QT += network
 greaterThan(QT_MAJOR_VERSION, 4) {
-  QT += webkitwidgets
+  qtHaveModule(webkitwidgets) {
+    QT += webkitwidgets
+   } else {
+      error("No QtWebKit installation found. QtWebKit is no longer included with Qt 5.6, so you may need to install it separately.")
+   }
 } else {
   QT += webkit
 }

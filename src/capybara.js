@@ -5,7 +5,11 @@ Capybara = {
 
   invoke: function () {
     try {
-      return this[CapybaraInvocation.functionName].apply(this, CapybaraInvocation.arguments);
+      if (CapybaraInvocation.functionName == "leftClick") {
+        return this["verifiedClickPosition"].apply(this, CapybaraInvocation.arguments);
+      } else {
+        return this[CapybaraInvocation.functionName].apply(this, CapybaraInvocation.arguments);
+      }
     } catch (e) {
       CapybaraInvocation.error = e;
     }
@@ -71,7 +75,8 @@ Capybara = {
     } else if (type == "textarea") {
       return node.innerHTML;
     } else {
-      return node.innerText || node.textContent;
+      visible_text = node.innerText;
+      return typeof visible_text === "string" ? visible_text : node.textContent;
     }
   },
 
@@ -183,25 +188,37 @@ Capybara = {
   },
 
   clickPosition: function(node) {
-    var rects = node.getClientRects();
-    var rect;
+    if(node.namespaceURI == 'http://www.w3.org/2000/svg') {
+      var rect = node.getBoundingClientRect();
 
-    for (var i = 0; i < rects.length; i++) {
-      rect = rects[i];
       if (rect.width > 0 && rect.height > 0)
         return CapybaraInvocation.clickPosition(node, rect.left, rect.top, rect.width, rect.height);
+    } else {
+      var rects = node.getClientRects();
+      var rect;
+
+      for (var i = 0; i < rects.length; i++) {
+        rect = rects[i];
+        if (rect.width > 0 && rect.height > 0)
+          return CapybaraInvocation.clickPosition(node, rect.left, rect.top, rect.width, rect.height);
+      }
     }
 
     var visible = this.isNodeVisible(node);
     throw new Capybara.UnpositionedElement(this.pathForNode(node), visible);
   },
 
-  click: function (index, action) {
+  verifiedClickPosition: function (index) {
     var node = this.getNode(index);
     node.scrollIntoViewIfNeeded();
     var pos = this.clickPosition(node);
     CapybaraInvocation.hover(pos.relativeX, pos.relativeY);
     this.expectNodeAtPosition(node, pos);
+    return pos;
+  },
+
+  click: function (index, action) {
+    var pos = this.verifiedClickPosition(index);
     action(pos.absoluteX, pos.absoluteY);
   },
 
@@ -227,9 +244,13 @@ Capybara = {
   },
 
   trigger: function (index, eventName) {
+    this.triggerOnNode(this.getNode(index), eventName);
+  },
+
+  triggerOnNode: function(node, eventName) {
     var eventObject = document.createEvent("HTMLEvents");
     eventObject.initEvent(eventName, true, true);
-    this.getNode(index).dispatchEvent(eventObject);
+    node.dispatchEvent(eventObject);
   },
 
   visible: function (index) {
@@ -264,6 +285,20 @@ Capybara = {
     return true;
   },
 
+  sendKeys: function (index, keys) {
+    var strindex, length;
+
+    length = keys.length;
+
+    if (length) {
+      this.focus(index);
+    }
+
+    for (strindex = 0; strindex < length; strindex++) {
+      CapybaraInvocation.keypress(keys[strindex]);
+    }
+  },
+
   set: function (index, value) {
     var length, maxLength, node, strindex, textTypes, type;
 
@@ -288,8 +323,9 @@ Capybara = {
           CapybaraInvocation.keypress(value[strindex]);
         }
 
-        if (value == '')
+        if (value === "") {
           this.trigger(index, "change");
+        }
       }
     } else if (type === "checkbox" || type === "radio") {
       if (node.checked != (value === "true")) {
@@ -322,8 +358,24 @@ Capybara = {
   },
 
   selectOption: function(index) {
-    this.getNode(index).selected = true;
-    this.trigger(index, "change");
+    var optionNode = this.getNode(index);
+    var selectNode = optionNode.parentNode;
+
+    if (optionNode.disabled)
+      return;
+
+    // click on select list
+    this.triggerOnNode(selectNode, 'mousedown');
+    selectNode.focus();
+    this.triggerOnNode(selectNode, 'mouseup');
+    this.triggerOnNode(selectNode, 'click');
+
+    // select option from list
+    this.triggerOnNode(optionNode, 'mousedown');
+    optionNode.selected = true;
+    this.triggerOnNode(selectNode, 'change');
+    this.triggerOnNode(optionNode, 'mouseup');
+    this.triggerOnNode(optionNode, 'click');
   },
 
   unselectOption: function(index) {

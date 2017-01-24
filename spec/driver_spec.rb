@@ -3,12 +3,26 @@
 require 'spec_helper'
 require 'capybara/webkit/driver'
 require 'base64'
+require 'self_signed_ssl_cert'
 
 describe Capybara::Webkit::Driver do
   include AppRunner
 
-  def visit(url, driver=driver)
-    driver.visit("#{AppRunner.app_host}#{url}")
+  def visit(path, driver=self.driver)
+    driver.visit(url(path))
+  end
+
+  def url(path)
+    "#{AppRunner.app_host}#{path}"
+  end
+
+  context "configuration" do
+    let(:options) { AppRunner.configuration.to_hash }
+
+    it "configures server automatically" do
+      expect { Capybara::Webkit::Driver.new(AppRunner.app, options) }.
+        to_not raise_error
+    end
   end
 
   context "iframe app" do
@@ -48,8 +62,21 @@ describe Capybara::Webkit::Driver do
               </head>
               <body>
                 <script type="text/javascript">
-                  document.write("<p id='farewell'>goodbye</p>");
+                  document.write("<p id='farewell'>goodbye</p><iframe id='g' src='/iframe2'></iframe>");
                 </script>
+              </body>
+            </html>
+          HTML
+        end
+
+        get '/iframe2' do
+          <<-HTML
+            <html>
+              <head>
+                <title>Frame 2</title>
+              </head>
+              <body>
+                <div>In frame 2</div>
               </body>
             </html>
           HTML
@@ -79,6 +106,37 @@ describe Capybara::Webkit::Driver do
       driver.within_frame(element) do
         driver.find_xpath("//*[contains(., 'goodbye')]").should_not be_empty
       end
+    end
+
+    it "switches to frame by element" do
+      frame = driver.find_xpath('//iframe').first
+      element = double(Capybara::Node::Base, base: frame)
+      driver.switch_to_frame(element)
+      driver.find_xpath("//*[contains(., 'goodbye')]").should_not be_empty
+      driver.switch_to_frame(:parent)
+    end
+
+    it "can switch back to the parent frame" do
+      frame = driver.find_xpath('//iframe').first
+      element = double(Capybara::Node::Base, base: frame)
+      driver.switch_to_frame(element)
+      driver.switch_to_frame(:parent)
+      driver.find_xpath("//*[contains(., 'greeting')]").should_not be_empty
+      driver.find_xpath("//*[contains(., 'goodbye')]").should be_empty
+    end
+
+    it "can switch to the top frame" do
+      frame = driver.find_xpath('//iframe').first
+      element = double(Capybara::Node::Base, base: frame)
+      driver.switch_to_frame(element)
+      frame2 = driver.find_xpath('//iframe[@id="g"]').first
+      element2 = double(Capybara::Node::Base, base: frame2)
+      driver.switch_to_frame(element2)
+      driver.find_xpath("//div[contains(., 'In frame 2')]").should_not be_empty
+      driver.switch_to_frame(:top)
+      driver.find_xpath("//*[contains(., 'greeting')]").should_not be_empty
+      driver.find_xpath("//*[contains(., 'goodbye')]").should be_empty
+      driver.find_xpath("//div[contains(., 'In frame 2')]").should be_empty
     end
 
     it "raises error for missing frame by index" do
@@ -474,6 +532,11 @@ describe Capybara::Webkit::Driver do
       result.should eq nil
     end
 
+    it "evaluates Javascript and returns a date" do
+      result = driver.evaluate_script(%<new Date("2016-04-01T00:00:00Z")>)
+      result.should eq "2016-04-01T00:00:00Z"
+    end
+
     it "evaluates Javascript and returns an object" do
       result = driver.evaluate_script(%<({ 'one' : 1 })>)
       result.should eq 'one' => 1
@@ -507,6 +570,38 @@ describe Capybara::Webkit::Driver do
     it "raises an error for failing Javascript" do
       expect { driver.execute_script(%<invalid salad>) }.
         to raise_error(Capybara::Webkit::InvalidResponseError)
+    end
+
+    it "passes arguments to executed Javascript" do
+      driver.execute_script(%<document.getElementById('greeting').innerHTML = arguments[0]>, "My argument")
+      driver.find_xpath("//p[contains(., 'My argument')]").should_not be_empty
+    end
+
+    it "passes multiple arguments to executed Javascript" do
+      driver.execute_script(
+        %<document.getElementById('greeting').innerHTML = arguments[0] + arguments[1] + arguments[2].color>,
+        "random", 4, {color: 'red'})
+      driver.find_xpath("//p[contains(., 'random4red')]").should_not be_empty
+    end
+
+    it "passes page elements to executed Javascript" do
+      greeting = driver.find_xpath("//p[@id='greeting']").first
+      driver.execute_script(%<arguments[0].innerHTML = arguments[1]>, greeting, "new content")
+      driver.find_xpath("//p[@id='greeting'][contains(., 'new content')]").should_not be_empty
+    end
+
+    it "passes arguments to evaaluated Javascript" do
+      driver.evaluate_script(%<arguments[0]>, 3).should eq 3
+    end
+
+    it "passes multiple arguments to evaluated Javascript" do
+      driver.evaluate_script(%<arguments[0] + arguments[1] + arguments[2].num>, 3, 4, {num: 5}).should eq 12
+    end
+
+    it "passes page elements to evaluated Javascript" do
+      greeting = driver.find_xpath("//p[@id='greeting']").first
+      driver.evaluate_script(%<arguments[1].innerHTML = arguments[0]; arguments[2]>, "newer content", greeting, 7).should eq 7
+      driver.find_xpath("//p[@id='greeting'][contains(., 'newer content')]").should_not be_empty
     end
 
     it "doesn't raise an error for Javascript that doesn't return anything" do
@@ -558,6 +653,24 @@ describe Capybara::Webkit::Driver do
 
     it "should handle text for svg elements" do
       driver.find_xpath("//*[@id='navy_text']").first.visible_text.should eq "In the navy!"
+    end
+  end
+
+  context "hidden text app" do
+    let(:driver) do
+      driver_for_html(<<-HTML)
+        <html>
+          <body>
+            <h1 style="display: none">Hello</h1>
+          </body>
+        </html>
+      HTML
+    end
+
+    before { visit("/") }
+
+    it "has no visible text" do
+      driver.find_xpath("/html").first.text.should be_empty
     end
   end
 
@@ -656,6 +769,51 @@ describe Capybara::Webkit::Driver do
               </html>
             HTML
           end
+
+          get '/ajax' do
+            <<-HTML
+              <html>
+                <head>
+                </head>
+                <body>
+                  <script type="text/javascript">
+                    function testAlert() {
+                      var xhr = new XMLHttpRequest();
+                      xhr.open('GET', '/slow', true);
+                      xhr.setRequestHeader('Content-Type', 'text/plain');
+                      xhr.onreadystatechange = function () {
+                        if (xhr.readyState == 4) {
+                          alert('From ajax');
+                        }
+                      };
+                      xhr.send();
+                    }
+                  </script>
+                  <input type="button" onclick="testAlert()" name="test"/>
+                </body>
+              </html>
+            HTML
+          end
+
+          get '/double' do
+            <<-HTML
+              <html>
+                <head>
+                </head>
+                <body>
+                  <script type="text/javascript">
+                    alert('First alert');
+                  </script>
+                  <input type="button" onclick="alert('Second alert')" name="test"/>
+                </body>
+              </html>
+            HTML
+          end
+
+          get '/slow' do
+            sleep 0.5
+            ""
+          end
         end
       end
 
@@ -679,6 +837,18 @@ describe Capybara::Webkit::Driver do
             visit('/')
           end
         }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with No?"
+      end
+
+      it 'finds two alert windows in a row' do
+        driver.accept_modal(:alert, text: 'First alert') do
+          visit('/double')
+        end
+
+        expect {
+          driver.accept_modal(:alert, text: 'Boom') do
+            driver.find_xpath("//input").first.click
+          end
+        }.to raise_error Capybara::ModalNotFound, "Unable to find modal dialog with Boom"
       end
 
       it 'waits to accept an async alert modal' do
@@ -715,6 +885,15 @@ describe Capybara::Webkit::Driver do
         visit("/")
         driver.reset!
         driver.alert_messages.should be_empty
+      end
+
+      it "clears alerts from ajax requests in between sessions" do
+        visit("/ajax")
+        driver.find("//input").first.click
+        driver.reset!
+        sleep 0.5
+        driver.alert_messages.should eq([])
+        expect { visit("/") }.not_to raise_error
       end
     end
 
@@ -1155,6 +1334,16 @@ describe Capybara::Webkit::Driver do
       textarea.value.should eq "newvalue"
     end
 
+    context "#send_keys" do
+      it "should support :backspace" do
+        input = driver.find_xpath("//input").first
+        input.set("dog")
+        input.value.should eq "dog"
+        input.send_keys(*[:backspace])
+        input.value.should eq "do"
+      end
+    end
+
     let(:monkey_option)   { driver.find_xpath("//option[@id='select-option-monkey']").first }
     let(:capybara_option) { driver.find_xpath("//option[@id='select-option-capybara']").first }
     let(:animal_select)   { driver.find_xpath("//select[@name='animal']").first }
@@ -1437,6 +1626,7 @@ describe Capybara::Webkit::Driver do
           #hover { max-width: 30em; }
           #hover span { line-height: 1.5; }
           #hover span:hover + .hidden { display: block; }
+          #circle_hover:hover + .hidden { display: block; }
           .hidden { display: none; }
         </style>
         </head>
@@ -1448,6 +1638,10 @@ describe Capybara::Webkit::Driver do
             <span>This really long paragraph has a lot of text and will wrap. This sentence ensures that we have four lines of text.</span>
             <div class="hidden">Text that only shows on hover.</div>
           </div>
+          <svg height="200" width="300">
+            <circle id="circle_hover" cx="50" cy="50" r="40" stroke="black" stroke-width="3" fill="red" />
+            <text class="hidden" y="110"> Sibling that only shows when circle is hovered over.</text>
+          </svg>
           <form action="/" method="GET">
             <select id="change_select" name="change_select">
               <option value="1" id="option-1" selected="selected">one</option>
@@ -1483,6 +1677,13 @@ describe Capybara::Webkit::Driver do
       driver.find_css("#hover").first.visible_text.should_not =~ /Text that only shows on hover/
       driver.find_css("#hover span").first.hover
       driver.find_css("#hover").first.visible_text.should =~ /Text that only shows on hover/
+    end
+
+    it "hovers an svg element" do
+      # visible_text does not work for SVG elements. It returns all the text.
+      driver.find_css("text").first.should_not be_visible
+      driver.find_css("#circle_hover").first.hover
+      driver.find_css("text").first.should be_visible
     end
 
     it "hovers an element off the screen" do
@@ -1727,6 +1928,7 @@ describe Capybara::Webkit::Driver do
       HTML
     end
 
+    let!(:connection) { fork_connection }
     before { visit("/") }
 
     it "raises a webkit error for the requested url" do
@@ -1739,15 +1941,15 @@ describe Capybara::Webkit::Driver do
     end
 
     def make_the_server_come_back
-      driver.browser.instance_variable_get(:@connection).unstub(:gets)
-      driver.browser.instance_variable_get(:@connection).unstub(:puts)
-      driver.browser.instance_variable_get(:@connection).unstub(:print)
+      connection.unstub(:gets)
+      connection.unstub(:puts)
+      connection.unstub(:print)
     end
 
     def make_the_server_go_away
-      driver.browser.instance_variable_get(:@connection).stub(:gets).and_return(nil)
-      driver.browser.instance_variable_get(:@connection).stub(:puts)
-      driver.browser.instance_variable_get(:@connection).stub(:print)
+      connection.stub(:gets).and_return(nil)
+      connection.stub(:puts)
+      connection.stub(:print)
     end
   end
 
@@ -1818,30 +2020,21 @@ describe Capybara::Webkit::Driver do
     end
 
     it "uses a custom cookie" do
-      driver.browser.set_cookie 'cookie=abc; domain=127.0.0.1; path=/'
+      driver.set_cookie 'cookie=abc; domain=127.0.0.1; path=/'
       visit "/"
       echoed_cookie.should eq "abc"
     end
 
     it "clears cookies" do
-      driver.browser.clear_cookies
+      driver.clear_cookies
       visit "/"
       echoed_cookie.should eq ""
     end
 
-    it "allows enumeration of cookies" do
-      cookies = driver.browser.get_cookies
-
-      cookies.size.should eq 1
-
-      cookie = Hash[cookies[0].split(/\s*;\s*/).map { |x| x.split("=", 2) }]
-      cookie["cookie"].should eq "abc"
-      cookie["domain"].should include "127.0.0.1"
-      cookie["path"].should eq "/"
-    end
-
-    it "allows reading access to cookies using a nice syntax" do
+    it "allows reading cookies" do
       driver.cookies["cookie"].should eq "abc"
+      driver.cookies.find("cookie").path.should eq "/"
+      driver.cookies.find("cookie").domain.should include "127.0.0.1"
     end
   end
 
@@ -2022,6 +2215,33 @@ describe Capybara::Webkit::Driver do
       driver.reset!
       visit "/"
       driver.find_xpath("//span[contains(.,'localStorage is enabled')]").should be_empty
+    end
+  end
+
+  context "caching app" do
+    let(:driver) do
+      etag_value = SecureRandom.hex
+
+      driver_for_app do
+        get '/' do
+          etag etag_value
+          <<-HTML
+            <html>
+              <body>
+                Expected body
+              </body>
+            </html>
+          HTML
+        end
+      end
+    end
+
+    it "returns a body for cached responses" do
+      visit '/'
+      first = driver.html
+      visit '/'
+      second = driver.html
+      expect(second).to eq(first)
     end
   end
 
@@ -2486,26 +2706,33 @@ CACHE MANIFEST
     end
 
     it "can authenticate a request" do
-      driver.browser.authenticate('user', 'password')
+      driver.authenticate('user', 'password')
       visit("/")
       driver.html.should include("Basic "+Base64.encode64("user:password").strip)
     end
 
     it "returns 401 for incorrectly authenticated request" do
-      driver.browser.authenticate('user1', 'password1')
-      driver.browser.timeout = 2
+      driver.authenticate('user1', 'password1')
       lambda { visit("/") }.should_not raise_error
       driver.status_code.should eq 401
     end
 
     it "returns 401 for unauthenticated request" do
-      driver.browser.timeout = 2
+      lambda { visit("/") }.should_not raise_error
+      driver.status_code.should eq 401
+    end
+
+    it "can be reset with subsequent authenticate call", skip_on_qt4: true do
+      driver.authenticate('user', 'password')
+      visit("/")
+      driver.html.should include("Basic "+Base64.encode64("user:password").strip)
+      driver.authenticate('user1', 'password1')
       lambda { visit("/") }.should_not raise_error
       driver.status_code.should eq 401
     end
   end
 
-  describe "url blacklisting" do
+  describe "url blacklisting", skip_if_offline: true do
     let(:driver) do
       driver_for_app do
         get "/" do
@@ -2541,10 +2768,12 @@ CACHE MANIFEST
     end
 
     before do
-      driver.browser.url_blacklist = ["http://example.org/path/to/file",
-                                      "http://example.*/foo/*",
-                                      "http://example.com",
-                                      "#{AppRunner.app_host}/script"]
+      configure do |config|
+        config.block_url "http://example.org/path/to/file"
+        config.block_url "http://example.*/foo/*"
+        config.block_url "http://example.com"
+        config.block_url "#{AppRunner.app_host}/script"
+      end
     end
 
     it "should not fetch urls blocked by host" do
@@ -2588,6 +2817,99 @@ CACHE MANIFEST
     end
   end
 
+  describe "url whitelisting", skip_if_offline: true do
+    it_behaves_like "output writer" do
+      let(:driver) do
+        driver_for_html(<<-HTML)
+          <<-HTML
+            <html>
+              <body>
+                <iframe src="http://example.com/path" id="frame"></iframe>
+                <iframe src="http://www.example.com" id="frame2"></iframe>
+                <iframe src="data:text/plain,Hello"></iframe>
+              </body>
+            </html>
+        HTML
+      end
+
+      it "prints a warning for remote requests by default" do
+        visit("/")
+
+        expect(stderr).to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "can allow specific hosts" do
+        configure do |config|
+          config.allow_url("example.com")
+          config.allow_url("www.example.com")
+        end
+
+        visit("/")
+
+        expect(stderr).not_to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+        driver.within_frame("frame") do
+          expect(driver.find("//body").first.text).not_to be_empty
+        end
+      end
+
+      it "can allow all hosts" do
+        configure(&:allow_unknown_urls)
+        visit("/")
+
+        expect(stderr).not_to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+        driver.within_frame("frame") do
+          expect(driver.find("//body").first.text).not_to be_empty
+        end
+      end
+
+      it "resets allowed hosts on reset" do
+        driver.allow_unknown_urls
+        driver.reset!
+        visit("/")
+
+        expect(stderr).to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "can block unknown hosts" do
+        configure(&:block_unknown_urls)
+        visit("/")
+
+        expect(stderr).not_to include("http://example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+        driver.within_frame("frame") do
+          expect(driver.find("//body").first.text).to be_empty
+        end
+      end
+
+      it "can allow urls with wildcards" do
+        configure { |config| config.allow_url("*/path") }
+        visit("/")
+
+        expect(stderr).to include("www.example.com")
+        expect(stderr).not_to include("example.com/path")
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "whitelists localhost on reset" do
+        driver.reset!
+
+        visit("/")
+
+        expect(stderr).not_to include(driver.current_url)
+      end
+
+      it "does not print a warning for data URIs" do
+        visit("/")
+
+        expect(stderr).not_to include('Request to unknown URL: data:text/plain')
+      end
+    end
+  end
+
   describe "timeout for long requests" do
     let(:driver) do
       driver_for_app do
@@ -2614,80 +2936,69 @@ CACHE MANIFEST
     end
 
     it "should not raise a timeout error when zero" do
-      driver.browser.timeout = 0
+      configure { |config| config.timeout = 0 }
       lambda { visit("/") }.should_not raise_error
     end
 
     it "should raise a timeout error" do
-      driver.browser.timeout = 1
+      configure { |config| config.timeout = 1 }
       lambda { visit("/") }.should raise_error(Timeout::Error, "Request timed out after 1 second(s)")
     end
 
     it "should not raise an error when the timeout is high enough" do
-      driver.browser.timeout = 10
+      configure { |config| config.timeout = 10 }
       lambda { visit("/") }.should_not raise_error
     end
 
     it "should set the timeout for each request" do
-      driver.browser.timeout = 10
+      configure { |config| config.timeout = 10 }
       lambda { visit("/") }.should_not raise_error
-      driver.browser.timeout = 1
+      driver.timeout = 1
       lambda { visit("/") }.should raise_error(Timeout::Error)
     end
 
     it "should set the timeout for each request" do
-      driver.browser.timeout = 1
+      configure { |config| config.timeout = 1 }
       lambda { visit("/") }.should raise_error(Timeout::Error)
       driver.reset!
-      driver.browser.timeout = 10
+      driver.timeout = 10
       lambda { visit("/") }.should_not raise_error
     end
 
     it "should raise a timeout on a slow form" do
-      driver.browser.timeout = 3
+      configure { |config| config.timeout = 3 }
       visit("/")
       driver.status_code.should eq 200
-      driver.browser.timeout = 1
+      driver.timeout = 1
       driver.find_xpath("//input").first.click
       lambda { driver.status_code }.should raise_error(Timeout::Error)
     end
 
     it "get timeout" do
-      driver.browser.timeout = 10
+      configure { |config| config.timeout = 10 }
       driver.browser.timeout.should eq 10
-      driver.browser.timeout = 3
-      driver.browser.timeout.should eq 3
     end
   end
 
   describe "logger app" do
-    it "logs nothing before turning on the logger" do
-      visit("/")
-      @write.close
-      log.should_not include logging_message
-    end
+    it_behaves_like "output writer" do
+      let(:driver) do
+        driver_for_html("<html><body>Hello</body></html>")
+      end
 
-    it "logs its commands after turning on the logger" do
-      driver.enable_logging
-      visit("/")
-      @write.close
-      log.should include logging_message
-    end
+      it "logs nothing in normal mode" do
+        configure { |config| config.debug = false }
+        visit("/")
+        stderr.should_not include logging_message
+      end
 
-    before do
-      @read, @write = IO.pipe
-    end
+      it "logs its commands in debug mode" do
+        configure { |config| config.debug = true }
+        visit("/")
+        stderr.should include logging_message
+      end
 
-    let(:logging_message) { 'Wrote response true' }
-
-    let(:driver) do
-      connection = Capybara::Webkit::Connection.new(:stderr => @write)
-      browser = Capybara::Webkit::Browser.new(connection)
-      Capybara::Webkit::Driver.new(AppRunner.app, :browser => browser)
-    end
-
-    def log
-      @read.read
+      let(:logging_message) { 'Wrote response true' }
     end
   end
 
@@ -2828,6 +3139,308 @@ CACHE MANIFEST
       driver.find_xpath("//p").first.text.should eq('first')
       driver.go_forward
       driver.find_xpath("//p").first.text.should eq('navigated')
+    end
+  end
+
+  context "response header contains colon" do
+    let(:driver) do
+      driver_for_app do
+        get "/" do
+          headers "Content-Disposition" => 'filename="File: name.txt"'
+        end
+      end
+    end
+
+    it "sets the response header" do
+      visit("/")
+
+      expect(
+        driver.response_headers["Content-Disposition"]
+      ).to eq 'filename="File: name.txt"'
+    end
+  end
+
+  context "with unfinished responses" do
+    it_behaves_like "output writer" do
+      let(:driver) do
+        count = 0
+        driver_for_app do
+          get "/" do
+            count += 1
+            <<-HTML
+              <html>
+                <body>
+                  <script type="text/javascript">
+                    setTimeout(function () {
+                      xhr = new XMLHttpRequest();
+                      xhr.open('GET', '/async?#{count}', true);
+                      xhr.setRequestHeader('Content-Type', 'text/plain');
+                      xhr.send();
+                    }, 50);
+                  </script>
+                </body>
+              </html>
+            HTML
+          end
+
+          get "/async" do
+            sleep 2
+            ""
+          end
+        end
+      end
+
+      it "aborts unfinished responses" do
+        driver.enable_logging
+        visit "/"
+        sleep 0.5
+        visit "/"
+        sleep 0.5
+        driver.reset!
+        stderr.should abort_request_to("/async?2")
+        stderr.should_not abort_request_to("/async?1")
+      end
+
+      def abort_request_to(path)
+        include(%{Aborting request to "#{url(path)}"})
+      end
+    end
+  end
+
+  context "when the driver process crashes" do
+    let(:driver) do
+      driver_for_app do
+        get "/" do
+          "<html><body>Relaunched</body></html>"
+        end
+      end
+    end
+
+    it "reports and relaunches on reset", skip_on_windows: true, skip_on_jruby: true do
+      connection = fork_connection
+      Process.kill "KILL", connection.pid
+      expect { driver.reset! }.to raise_error(Capybara::Webkit::CrashError)
+      visit "/"
+      expect(driver.html).to include("Relaunched")
+    end
+  end
+
+  context "handling of SSL validation errors" do
+    before do
+      # set up minimal HTTPS server
+      @host = "127.0.0.1"
+      @server = TCPServer.new(@host, 0)
+      @port = @server.addr[1]
+
+      # set up SSL layer
+      ssl_serv = OpenSSL::SSL::SSLServer.new(@server, $openssl_self_signed_ctx)
+
+      @server_thread = Thread.new(ssl_serv) do |serv|
+        while conn = serv.accept do
+          # read request
+          request = []
+          until (line = conn.readline.strip).empty?
+            request << line
+          end
+
+          # write response
+          html = "<html><body>D'oh!</body></html>"
+          conn.write "HTTP/1.1 200 OK\r\n"
+          conn.write "Content-Type:text/html\r\n"
+          conn.write "Content-Length: %i\r\n" % html.size
+          conn.write "\r\n"
+          conn.write html
+          conn.close
+        end
+      end
+
+      fork_connection
+    end
+
+    after do
+      @server_thread.kill
+      @server.close
+    end
+
+    context "with default settings" do
+      it "doesn't accept a self-signed certificate" do
+        lambda { driver.visit "https://#{@host}:#{@port}/" }.should raise_error
+      end
+
+      it "doesn't accept a self-signed certificate in a new window" do
+        driver.execute_script("window.open('about:blank')")
+        driver.switch_to_window(driver.window_handles.last)
+        lambda { driver.visit "https://#{@host}:#{@port}/" }.should raise_error
+      end
+    end
+
+    context "ignoring SSL errors" do
+      it "accepts a self-signed certificate if configured to do so" do
+        configure(&:ignore_ssl_errors)
+        driver.visit "https://#{@host}:#{@port}/"
+      end
+
+      it "accepts a self-signed certificate in a new window when configured" do
+        configure(&:ignore_ssl_errors)
+        driver.execute_script("window.open('about:blank')")
+        driver.switch_to_window(driver.window_handles.last)
+        driver.visit "https://#{@host}:#{@port}/"
+      end
+    end
+
+    let(:driver) { driver_for_html("") }
+  end
+
+  context "skip image loading" do
+    let(:driver) do
+      driver_for_app do
+        requests = []
+
+        get "/" do
+          <<-HTML
+            <html>
+              <head>
+                <style>
+                  body {
+                    background-image: url(/path/to/bgimage);
+                  }
+                </style>
+              </head>
+              <body>
+                <img src="/path/to/image"/>
+              </body>
+            </html>
+          HTML
+        end
+
+        get "/requests" do
+          <<-HTML
+            <html>
+              <body>
+                #{requests.map { |path| "<p>#{path}</p>" }.join}
+              </body>
+            </html>
+          HTML
+        end
+
+        get %r{/path/to/(.*)} do |path|
+          requests << path
+        end
+      end
+    end
+
+    it "should load images by default" do
+      visit("/")
+      requests.should match_array %w(image bgimage)
+    end
+
+    it "should not load images when disabled" do
+      configure(&:skip_image_loading)
+      visit("/")
+      requests.should eq []
+    end
+
+    let(:requests) do
+      visit "/requests"
+      driver.find("//p").map(&:text)
+    end
+  end
+
+  describe "#set_proxy" do
+    before do
+      @host = "127.0.0.1"
+      @user = "user"
+      @pass = "secret"
+      @url  = "http://example.org/"
+
+      @server = TCPServer.new(@host, 0)
+      @port = @server.addr[1]
+
+      @proxy_requests = []
+      @proxy = Thread.new(@server, @proxy_requests) do |serv, proxy_requests|
+        while conn = serv.accept do
+          # read request
+          request = []
+          until (line = conn.readline.strip).empty?
+            request << line
+          end
+
+          # send response
+          auth_header = request.find { |h| h =~ /Authorization:/i }
+          if auth_header || request[0].split(/\s+/)[1] =~ /^\//
+            html = "<html><body>D'oh!</body></html>"
+            conn.write "HTTP/1.1 200 OK\r\n"
+            conn.write "Content-Type:text/html\r\n"
+            conn.write "Content-Length: %i\r\n" % html.size
+            conn.write "\r\n"
+            conn.write html
+            conn.close
+            proxy_requests << request if auth_header
+          else
+            conn.write "HTTP/1.1 407 Proxy Auth Required\r\n"
+            conn.write "Proxy-Authenticate: Basic realm=\"Proxy\"\r\n"
+            conn.write "\r\n"
+            conn.close
+            proxy_requests << request
+          end
+        end
+      end
+
+      configure do |config|
+        config.allow_url("example.org")
+        config.use_proxy host: @host, port: @port, user: @user, pass: @pass
+      end
+
+      fork_connection
+
+      driver.visit @url
+      @proxy_requests.size.should eq 2
+      @request = @proxy_requests[-1]
+    end
+
+    after do
+      @proxy.kill
+      @server.close
+    end
+
+    let(:driver) do
+      driver_for_html("")
+    end
+
+    it "uses the HTTP proxy correctly" do
+      @request[0].should match(/^GET\s+http:\/\/example.org\/\s+HTTP/i)
+      @request.find { |header|
+        header =~ /^Host:\s+example.org$/i }.should_not be nil
+    end
+
+    it "sends correct proxy authentication" do
+      auth_header = @request.find { |header|
+        header =~ /^Proxy-Authorization:\s+/i }
+      auth_header.should_not be nil
+
+      user, pass = Base64.decode64(auth_header.split(/\s+/)[-1]).split(":")
+      user.should eq @user
+      pass.should eq @pass
+    end
+
+    it "uses the proxy's response" do
+      driver.html.should include "D'oh!"
+    end
+
+    it "uses original URL" do
+      driver.current_url.should eq @url
+    end
+
+    it "uses URLs changed by javascript" do
+      driver.execute_script %{window.history.pushState("", "", "/blah")}
+      driver.current_url.should eq "http://example.org/blah"
+    end
+
+    it "is possible to disable proxy again" do
+      @proxy_requests.clear
+      driver.browser.clear_proxy
+      driver.visit "http://#{@host}:#{@port}/"
+      @proxy_requests.size.should eq 0
     end
   end
 

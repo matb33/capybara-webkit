@@ -1,5 +1,6 @@
 #ifndef _WEBPAGE_H
 #define _WEBPAGE_H
+#include <QtGlobal>
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QtWebKitWidgets>
 #else
@@ -46,14 +47,16 @@ class WebPage : public QWebPage {
     bool matchesWindowSelector(QString);
     void setFocus();
     void unsupportedContentFinishedReply(QNetworkReply *reply);
-    QStringList pageHeaders();
+    QVariantMap pageHeaders();
     QByteArray body();
     QString contentType();
     void mouseEvent(QEvent::Type type, const QPoint &position, Qt::MouseButton button);
     bool clickTest(QWebElement element, int absoluteX, int absoluteY);
     void resize(int, int);
     int modalCount();
-    QString modalMessage(int);
+    QString modalMessage();
+    void setCurrentFrameParent(QWebFrame* frame);
+    QWebFrame* currentFrameParent();
 
   public slots:
     bool shouldInterruptJavaScript();
@@ -71,7 +74,7 @@ class WebPage : public QWebPage {
     void pageFinished(bool);
     void requestCreated(QByteArray &url, QNetworkReply *reply);
     void replyFinished(QNetworkReply *reply);
-    void modalReady(int);
+    void modalReady();
 
   protected:
     virtual void javaScriptConsoleMessage(const QString &message, int lineNumber, const QString &sourceID);
@@ -104,6 +107,7 @@ class WebPage : public QWebPage {
     QList<QVariantMap> m_modalResponses;
     QStringList m_modalMessages;
     void addModalMessage(bool, const QString &, const QRegExp &);
+    QWebFrame* m_currentFrameParent;
 };
 
 #endif //_WEBPAGE_H

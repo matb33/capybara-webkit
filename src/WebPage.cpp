@@ -21,6 +21,7 @@ WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
   m_uuid = QUuid::createUuid().toString();
   m_confirmAction = true;
   m_promptAction = false;
+  m_currentFrameParent = 0;
 
   quint64 num = 0xFFFFFFFF;
 
@@ -94,13 +95,15 @@ void WebPage::setFrameProperties(QWebFrame *frame, QUrl &requestedUrl, NetworkRe
   if (frame->requestedUrl() == requestedUrl) {
     int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     frame->setProperty("statusCode", statusCode);
-    QStringList headers;
-    foreach(QNetworkReply::RawHeaderPair header, reply->rawHeaderPairs())
-      headers << header.first+": "+header.second;
-    frame->setProperty("headers", headers);
-    frame->setProperty("body", reply->data());
-    QVariant contentMimeType = reply->header(QNetworkRequest::ContentTypeHeader);
-    frame->setProperty("contentType", contentMimeType);
+    if (statusCode != 304) {
+      QVariantMap headers;
+      foreach(QNetworkReply::RawHeaderPair header, reply->rawHeaderPairs())
+        headers[header.first] = QString(header.second);
+      frame->setProperty("headers", headers);
+      frame->setProperty("body", reply->data());
+      QVariant contentMimeType = reply->header(QNetworkRequest::ContentTypeHeader);
+      frame->setProperty("contentType", contentMimeType);
+    }
   }
 }
 
@@ -264,6 +267,7 @@ bool WebPage::javaScriptPrompt(QWebFrame *frame, const QString &message, const Q
 
 void WebPage::loadStarted() {
   m_loading = true;
+  m_currentFrameParent = currentFrame()->parentFrame();
   m_errorPageMessage = QString();
 }
 
@@ -370,8 +374,8 @@ int WebPage::getLastStatus() {
   return currentFrame()->property("statusCode").toInt();
 }
 
-QStringList WebPage::pageHeaders() {
-  return currentFrame()->property("headers").toStringList();
+QVariantMap WebPage::pageHeaders() {
+  return currentFrame()->property("headers").toMap();
 }
 
 QByteArray WebPage::body() {
@@ -483,8 +487,8 @@ int WebPage::modalCount() {
   return m_modalMessages.length();
 }
 
-QString WebPage::modalMessage(int id) {
-  return m_modalMessages[id - 1];
+QString WebPage::modalMessage() {
+  return m_modalMessages.takeFirst();
 }
 
 void WebPage::addModalMessage(bool expectedType, const QString &message, const QRegExp &expectedMessage) {
@@ -492,5 +496,15 @@ void WebPage::addModalMessage(bool expectedType, const QString &message, const Q
     m_modalMessages << message;
   else
     m_modalMessages << QString();
-  emit modalReady(m_modalMessages.length());
+  emit modalReady();
 }
+
+QWebFrame* WebPage::currentFrameParent() {
+  return m_currentFrameParent;
+}
+
+void WebPage::setCurrentFrameParent(QWebFrame* frame) {
+  m_currentFrameParent = frame;
+}
+
+

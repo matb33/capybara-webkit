@@ -1,4 +1,5 @@
-require 'json'
+require "json"
+require "capybara/webkit/errors"
 
 module Capybara::Webkit
   class Browser
@@ -71,7 +72,7 @@ module Capybara::Webkit
     end
 
     def response_headers
-      Hash[command("Headers").split("\n").map { |header| header.split(": ") }]
+      JSON.parse(command("Headers"))
     end
 
     def current_url
@@ -195,6 +196,8 @@ module Capybara::Webkit
     end
 
     def url_blacklist=(black_list)
+      warn '[DEPRECATION] Capybara::Webkit::Browser#url_blacklist= ' \
+        'is deprecated. Please use page.driver.block_url instead.'
       command("SetUrlBlacklist", *Array(black_list))
     end
 
@@ -207,15 +210,26 @@ module Capybara::Webkit
       end
       check
       read_response
+    rescue SystemCallError => exception
+      @connection.restart
+      raise(Capybara::Webkit::CrashError, <<-MESSAGE.strip)
+The webkit_server process crashed!
+
+  #{exception.message}
+
+This is a bug in capybara-webkit. For help with this crash, please visit:
+
+https://github.com/thoughtbot/capybara-webkit/wiki/Reporting-Crashes
+      MESSAGE
     end
 
-    def evaluate_script(script)
-      json = command('Evaluate', script)
+    def evaluate_script(script, *args)
+      json = command('Evaluate', script, args.to_json)
       JSON.parse("[#{json}]").first
     end
 
-    def execute_script(script)
-      command('Execute', script)
+    def execute_script(script, *args)
+      command('Execute', script, args.to_json)
     end
 
     def render(path, width, height)
@@ -261,6 +275,22 @@ module Capybara::Webkit
 
     def go_forward
       command("GoForward")
+    end
+
+    def allow_url(url)
+      command("AllowUrl", url)
+    end
+
+    def block_url(url)
+      command("BlockUrl", url)
+    end
+
+    def block_unknown_urls
+      command("SetUnknownUrlMode", "block")
+    end
+
+    def allow_unknown_urls
+      allow_url("*")
     end
 
     private

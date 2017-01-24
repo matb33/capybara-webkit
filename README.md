@@ -11,7 +11,7 @@ Qt Dependency and Installation Issues
 
 capybara-webkit depends on a WebKit implementation from Qt, a cross-platform
 development toolkit. You'll need to download the Qt libraries to build and
-install the gem. You can find instructions for downloading and installing QT on
+install the gem. You can find instructions for downloading and installing Qt on
 the
 [capybara-webkit wiki](https://github.com/thoughtbot/capybara-webkit/wiki/Installing-Qt-and-compiling-capybara-webkit).
 capybara-webkit requires Qt version 4.8 or greater.
@@ -39,7 +39,7 @@ If you don't have any luck there, please post to [Stack Overflow]. Please don't
 open a Github issue for a system-specific compiler issue.
 
 [Reporting Crashes]: https://github.com/thoughtbot/capybara-webkit/wiki/Reporting-Crashes
-[capybara-webkit wiki]: https://github.com/thoughtbot/capybara-webkit/wiki
+[wiki]: https://github.com/thoughtbot/capybara-webkit/wiki
 [Stack Overflow]: http://stackoverflow.com/questions/tagged/capybara-webkit
 
 CI
@@ -81,6 +81,60 @@ If you're using capybara-webkit with Sinatra, don't forget to set
 ```ruby
 Capybara.app = MySinatraApp.new
 ```
+
+Configuration
+-------------
+
+You can configure global options using `Capybara::Webkit.configure`:
+
+``` ruby
+Capybara::Webkit.configure do |config|
+  # Enable debug mode. Prints a log of everything the driver is doing.
+  config.debug = true
+
+  # By default, requests to outside domains (anything besides localhost) will
+  # result in a warning. Several methods allow you to change this behavior.
+
+  # Silently return an empty 200 response for any requests to unknown URLs.
+  config.block_unknown_urls
+
+  # Allow pages to make requests to any URL without issuing a warning.
+  config.allow_unknown_urls
+
+  # Allow a specific domain without issuing a warning.
+  config.allow_url("example.com")
+
+  # Allow a specific URL and path without issuing a warning.
+  config.allow_url("example.com/some/path")
+
+  # Wildcards are allowed in URL expressions.
+  config.allow_url("*.example.com")
+
+  # Silently return an empty 200 response for any requests to the given URL.
+  config.block_url("example.com")
+
+  # Timeout if requests take longer than 5 seconds
+  config.timeout = 5
+
+  # Don't raise errors when SSL certificates can't be validated
+  config.ignore_ssl_errors
+
+  # Don't load images
+  config.skip_image_loading
+
+  # Use a proxy
+  config.use_proxy(
+    host: "example.com",
+    port: 1234,
+    user: "proxy",
+    pass: "secret"
+  )
+end
+```
+
+These options will take effect for all future sessions and only need to be set
+once. It's recommended that you configure these in your `spec_helper.rb` or
+`test_helper.rb` rather than a `before` or `setup` block.
 
 Offline Application Cache
 -------------------------
@@ -130,20 +184,36 @@ page.driver.header 'Referer', 'https://www.thoughtbot.com'
 Contributing
 ------------
 
-See the CONTRIBUTING document.
+See the [CONTRIBUTING] document.
+Thank you, [contributors]!
 
-About
------
-
-The capybara WebKit driver is maintained by Joe Ferris and Matt Horan. It was written by [thoughtbot, inc](http://thoughtbot.com/community) with the help of numerous [contributions from the open source community](https://github.com/thoughtbot/capybara-webkit/contributors).
-
-Code for rendering the current webpage to a PNG is borrowed from Phantom.js' implementation.
-
-![thoughtbot](http://thoughtbot.com/images/tm/logo.png)
-
-The names and logos for thoughtbot are trademarks of thoughtbot, inc.
+[CONTRIBUTING]: CONTRIBUTING.md
+[contributors]: https://github.com/thoughtbot/capybara-webkit/graphs/contributors
 
 License
 -------
 
-capybara-webkit is Copyright (c) 2010-2014 thoughtbot, inc. It is free software, and may be redistributed under the terms specified in the LICENSE file.
+capybara-webkit is Copyright (c) 2010-2015 thoughtbot, inc. It is free software,
+and may be redistributed under the terms specified in the [LICENSE] file.
+
+[LICENSE]: /LICENSE
+
+About
+-----
+
+The capybara WebKit driver is maintained by Joe Ferris and Matt Horan.
+
+Code for rendering the current webpage to a PNG is borrowed from Phantom.js'
+implementation.
+
+![thoughtbot](https://thoughtbot.com/logo.png)
+
+capybara-webkit is maintained and funded by thoughtbot, inc.
+The names and logos for thoughtbot are trademarks of thoughtbot, inc.
+
+We love open source software!
+See [our other projects][community]
+or [hire us][hire] to help build your product.
+
+[community]: https://thoughtbot.com/community?utm_source=github
+[hire]: https://thoughtbot.com/hire-us?utm_source=github

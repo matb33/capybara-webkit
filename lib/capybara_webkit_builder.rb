@@ -1,5 +1,6 @@
 require "fileutils"
 require "rbconfig"
+require "shellwords"
 
 module CapybaraWebkitBuilder
   extend self
@@ -15,29 +16,14 @@ module CapybaraWebkitBuilder
     ENV['QMAKE'] || default_qmake_binary
   end
 
-  def spec
-    ENV['SPEC'] || os_spec
-  end
-
   def default_qmake_binary
     case RbConfig::CONFIG['host_os']
     when /freebsd/
       "qmake-qt4"
+    when /openbsd/
+      "qmake-qt5"
     else
       "qmake"
-    end
-  end
-
-  def os_spec
-    case RbConfig::CONFIG['host_os']
-    when /linux/
-      "linux-g++"
-    when /freebsd/
-      "freebsd-g++"
-    when /mingw32/
-      "win32-g++"
-    else
-      "macx-g++"
     end
   end
 
@@ -52,12 +38,14 @@ module CapybaraWebkitBuilder
     success
   end
 
-  def makefile(config = '')
-    sh("#{qmake_bin} -spec #{spec} #{config}")
+  def makefile(*configs)
+    configs += default_configs
+    configs = configs.map { |config| config.shellescape}.join(" ")
+    sh("#{qmake_bin} #{configs}")
   end
 
   def qmake
-    sh("#{make_bin} qmake")
+    make "qmake"
   end
 
   def path_to_binary
@@ -70,7 +58,7 @@ module CapybaraWebkitBuilder
   end
 
   def build
-    sh(make_bin) or return false
+    make or return false
 
     FileUtils.mkdir("bin") unless File.directory?("bin")
     FileUtils.cp(path_to_binary, "bin", :preserve => true)
@@ -82,10 +70,36 @@ module CapybaraWebkitBuilder
     end
   end
 
+  def default_configs
+    configs = []
+    libpath = ENV["CAPYBARA_WEBKIT_LIBS"]
+    cppflags = ENV["CAPYBARA_WEBKIT_INCLUDE_PATH"]
+    if libpath
+      configs << "LIBS += #{libpath}"
+    end
+    if cppflags
+      configs << "INCLUDEPATH += #{cppflags}"
+    end
+    configs
+  end
+
   def build_all
     makefile &&
     qmake &&
     build &&
     clean
+  end
+
+  def make(target = "")
+    env_hide("CDPATH") { sh("#{make_bin} #{target}") }
+  end
+
+  def env_hide(name)
+    @stored_env ||= {}
+    @stored_env[name] = ENV.delete(name)
+
+    yield
+  ensure
+    ENV[name] = @stored_env[name]
   end
 end

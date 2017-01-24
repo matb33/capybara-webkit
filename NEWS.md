@@ -1,3 +1,85 @@
+New for 1.11.1:
+
+* Fix compiling on OS X with Qt 4.8
+
+New for 1.11.0:
+
+* Pass default Server to Connection when not user provided
+* Support :backspace in Node#send_keys
+* Allow Qt 5.6 with QtWebKit module
+* Fix checkbox/radio screenshots on OS X using Fusion style
+
+New for 1.10.0:
+
+* Capybara 2.7 compatibility
+* Extract class for booting the server
+* Move stderr option to config
+* Deprecate webkit_debug driver
+* Abort requests before changing settings
+* Convert JavaScript DateTime objects to Ruby Date objects on evaluation
+
+New for 1.9.0:
+
+* Raise error for Qt version greater than 5.5
+* Fix hovering SVG elements
+* Add basic send_keys implementation
+
+New for 1.8.0:
+
+* Allow Capybara 2.6
+
+New for 1.7.1:
+
+* Fix deprecation messages relating to default_wait_time
+
+New for 1.7.0:
+
+* Capybara 2.5 compatibility (except Node#send_keys)
+* Update UnknownUrlHandler warning to use non-deprecated methods
+
+New for 1.6.0:
+
+* New, easier, global configuration API.
+* Add `page.driver.allow_unknown_urls` to silent all unknown host warnings.
+* Add warning for users on Qt 4.
+* Fix bug when parsing response headers with values containing colons.
+* Allow multiple, different basic authorizations in a single session.
+* Caches behave more like Selenium
+* Select tag events behave more like Selenium
+* Deprecated `driver.browser`
+* Provide better behavior and information when the driver crashes
+
+New for 1.5.2:
+
+* Fixes bug where aborted Ajax requests caused a crash during reset.
+
+New for 1.5.1:
+
+* Fixes bug where Ajax requests would continue after a reset, causing native
+  alerts to appear for some users and crashes for others.
+
+New for 1.5.0:
+
+* Fixes for OpenBSD
+* Disable web page and object memory cache
+
+New for 1.4.1:
+
+* Do not consider data URIs unknown.
+* Make sure webkit_server process runs in background.
+
+New for 1.4.0:
+
+* Fix returning invisible text on a hidden page
+* Expose INCLUDEPATH and LIBS qmake variables
+* Drop support for older Capybara versions
+* Introduce allowed, blocked URL filters
+
+New for 1.3.1:
+
+* Inherit from Capybara::Driver::Base for Capybara 2.4.4 compatibility.
+* Fix a bug in the modal API which could cause an incorrect modal to be found.
+
 New for 1.3.0:
 
 * Capybara 2.4 compatibility.
