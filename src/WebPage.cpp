@@ -61,7 +61,7 @@ WebPage::WebPage(WebPageManager *manager, QObject *parent) : QWebPage(parent) {
 }
 
 void WebPage::createWindow() {
-  QSize size(1680, 1050);
+  QSize size(960, 540);
   setViewportSize(size);
 }
 
